@@ -1,0 +1,91 @@
+name: Deploy Pulumi Lambda
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      AWS_REGION: ap-southeast-1
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions-install-pulumi-cli@v1
+
+      - name: Initialize project if missing
+        run: |
+          if [ ! -f Pulumi.yaml ]; then
+            pulumi new aws-typescript-git --name pulumi-lambda-git --description "Pulumi Lambda Deployment from Github" --stack dev --yes
+          fi
+
+      - name: Install dependencies
+        run: npm install @pulumi/aws
+
+      - name: Create Lambda handler if missing
+        run: |
+          mkdir -p lambda
+          if [ ! -f lambda/index.js ]; then
+            cat << 'EOF' > lambda/index.js
+            exports.handler = async (event) => {
+                console.log("Event: ", event);
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({ message: "Hello from Pulumi Lambda!" }),
+                };
+            };
+            EOF
+          fi
+
+      - name: Create Pulumi infra file if missing
+        run: |
+          if [ ! -f index.ts ]; then
+            cat << 'EOF' > index.ts
+            import * as aws from "@pulumi/aws";
+
+            const role = new aws.iam.Role("lambdaRole", {
+                assumeRolePolicy: JSON.stringify({
+                    Version: "2012-10-17",
+                    Statement: [{
+                        Action: "sts:AssumeRole",
+                        Principal: { Service: "lambda.amazonaws.com" },
+                        Effect: "Allow",
+                    }],
+                }),
+            });
+
+            new aws.iam.RolePolicyAttachment("lambdaRolePolicy", {
+                role: role.name,
+                policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            });
+
+            const lambdaFunc = new aws.lambda.Function("myLambda", {
+                runtime: "nodejs20.x",
+                code: new aws.s3.BucketObject("lambdaCode", {
+                    bucket: new aws.s3.Bucket("lambdaBucket").bucket,
+                    source: new pulumi.asset.FileArchive("./lambda"),
+                }).bucket.apply(bucket => `s3://${bucket}`),
+                handler: "index.handler",
+                role: role.arn,
+            });
+
+            export const lambdaName = lambdaFunc.name;
+            EOF
+          fi
+
+      - name: Deploy with Pulumi
+        run: pulumi up --yes
+
