@@ -32,7 +32,7 @@ jobs:
       - name: Initialize project if missing
         run: |
           if [ ! -f Pulumi.yaml ]; then
-            pulumi new aws-typescript-git --name pulumi-lambda-git --description "Pulumi Lambda Deployment from Github" --stack dev --yes
+            pulumi new aws-typescript-git --name pulumi-lambda-git --description "Pulumi Lambda Deployment from Github" --stack dev --yes --force
           fi
 
       - name: Install dependencies
