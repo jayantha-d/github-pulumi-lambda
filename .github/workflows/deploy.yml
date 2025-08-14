@@ -86,7 +86,7 @@ jobs:
             });
 
             export const lambdaName = lambdaFunc.name;
-            EOF
+          EOF
           fi
 
       - name: Deploy with Pulumi
