@@ -24,7 +24,10 @@ jobs:
           node-version: '20'
 
       - name: Install Pulumi CLI
-        uses: pulumi/actions-install-pulumi-cli@v1
+        #uses: pulumi/actions-install-pulumi-cli@v1
+        uses: pulumi/setup-pulumi@v2 # Or a more recent version if available
+        with:
+          pulumi-version: 3.3.0 # Specify the desired Pulumi CLI version
 
       - name: Initialize project if missing
         run: |
