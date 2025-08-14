@@ -50,7 +50,7 @@ jobs:
                     body: JSON.stringify({ message: "Hello from Pulumi Lambda!" }),
                 };
             };
-            EOF
+          EOF
           fi
 
       - name: Create Pulumi infra file if missing
