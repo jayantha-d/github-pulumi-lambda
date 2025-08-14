@@ -22,7 +22,7 @@ jobs:
           node-version: '20'
 
       - name: Install Pulumi CLI
-        uses: pulumi/actions-install-pulumi-cli@v1
+        uses: pulumi/setup-pulumi@v2
 
       - name: Destroy stack
         run: pulumi destroy --yes
