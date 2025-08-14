@@ -24,19 +24,20 @@ jobs:
           node-version: '20'
 
       - name: Install Pulumi CLI
-        #uses: pulumi/actions-install-pulumi-cli@v1
-        uses: pulumi/setup-pulumi@v2 # Or a more recent version if available
+        uses: pulumi/setup-pulumi@v2
         with:
-          pulumi-version: 3.3.0 # Specify the desired Pulumi CLI version
+          pulumi-version: 3.131.0 # Latest stable as of 2025
 
-      - name: Initialize project if missing
+      - name: Initialize Pulumi project if missing
         run: |
           if [ ! -f Pulumi.yaml ]; then
-            pulumi new aws-typescript --name pulumi-lambda-git --description "Pulumi Lambda Deployment from Github" --stack dev --yes --force
+            pulumi new aws-typescript --name pulumi-lambda-git \
+              --description "Pulumi Lambda Deployment from Github" \
+              --stack dev --yes --force
           fi
 
       - name: Install dependencies
-        run: npm install @pulumi/aws
+        run: npm install @pulumi/aws @pulumi/pulumi
 
       - name: Create Lambda handler if missing
         run: |
@@ -44,12 +45,12 @@ jobs:
           if [ ! -f lambda/index.js ]; then
             cat << 'EOF' > lambda/index.js
             exports.handler = async (event) => {
-                console.log("Event: ", event);
-                return {
-                    statusCode: 200,
-                    body: JSON.stringify({ message: "Hello from Pulumi Lambda!" }),
-                };
-            };
+              console.log("Event: ", event);
+              return {
+                  statusCode: 200,
+                  body: JSON.stringify({ message: "Hello from Pulumi Lambda!" }),
+              };
+          };
           EOF
           fi
 
@@ -57,38 +58,39 @@ jobs:
         run: |
           if [ ! -f index.ts ]; then
             cat << 'EOF' > index.ts
-            import * as aws from "@pulumi/aws";
-
-            const role = new aws.iam.Role("lambdaRole", {
-                assumeRolePolicy: JSON.stringify({
-                    Version: "2012-10-17",
-                    Statement: [{
-                        Action: "sts:AssumeRole",
-                        Principal: { Service: "lambda.amazonaws.com" },
-                        Effect: "Allow",
-                    }],
-                }),
-            });
-
-            new aws.iam.RolePolicyAttachment("lambdaRolePolicy", {
-                role: role.name,
-                policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-            });
-
-            const lambdaFunc = new aws.lambda.Function("myLambda", {
-                runtime: "nodejs20.x",
-                code: new aws.s3.BucketObject("lambdaCode", {
-                    bucket: new aws.s3.Bucket("lambdaBucket").bucket,
-                    source: new pulumi.asset.FileArchive("./lambda"),
-                }).bucket.apply(bucket => `s3://${bucket}`),
-                handler: "index.handler",
-                role: role.arn,
-            });
-
-            export const lambdaName = lambdaFunc.name;
+          import * as pulumi from "@pulumi/pulumi";
+          import * as aws from "@pulumi/aws";
+          
+          // IAM Role for Lambda
+          const role = new aws.iam.Role("lambdaRole", {
+              assumeRolePolicy: JSON.stringify({
+                  Version: "2012-10-17",
+                  Statement: [{
+                      Action: "sts:AssumeRole",
+                      Principal: { Service: "lambda.amazonaws.com" },
+                      Effect: "Allow",
+                  }],
+              }),
+          });
+          
+          // Attach basic execution policy
+          new aws.iam.RolePolicyAttachment("lambdaRolePolicy", {
+              role: role.name,
+              policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          });
+          
+          // Lambda Function using local folder
+          const lambdaFunc = new aws.lambda.Function("myLambda", {
+              runtime: "nodejs20.x",
+              code: new pulumi.asset.FileArchive("./lambda"),
+              handler: "index.handler",
+              role: role.arn,
+          });
+          
+          // Export Lambda name
+          export const lambdaName = lambdaFunc.name;
           EOF
           fi
 
       - name: Deploy with Pulumi
         run: pulumi up --yes
-
